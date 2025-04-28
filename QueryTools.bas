@@ -1,6 +1,6 @@
 Attribute VB_Name = "QueryTools"
 ' ----- Version -----
-'        1.5.1
+'        1.5.2
 ' -------------------
 
 Option Explicit
@@ -342,17 +342,20 @@ ErrorSection = "RestoreSavedData-" & i
             For j = 0 To manualDataEntrySize - 1
                 targetArray(i, manualDataEntryStart + j) = savedArr(1, j + 1)
             Next j
-        ElseIf targetArray(i, statusColumn) = "RECONHECIDO" Then
-            Dim k As Long
-            For k = 0 To manualDataEntrySize - 3
-                targetArray(i, manualDataEntryStart + k) = ""
-            Next k
-            targetArray(i, manualDataEntryStart + manualDataEntrySize - 2) = "RECONHECIDO"
         Else
             Dim l As Long
             For l = 0 To manualDataEntrySize - 1
                 targetArray(i, manualDataEntryStart + l) = ""
             Next l
+        End If
+        
+        ' Set "Situação" column as "RECONHECIDO"
+        If targetArray(i, statusColumn) = "RECONHECIDO" Then
+            Dim k As Long
+            For k = 0 To manualDataEntrySize - 3
+                targetArray(i, manualDataEntryStart + k) = ""
+            Next k
+            targetArray(i, manualDataEntryStart + manualDataEntrySize - 2) = "RECONHECIDO"
         End If
         
         If savedPMNames.Exists(ID) And UCase(targetArray(i, PMColumn)) = "NÃO ATRIBUÍDO" And UCase(savedPMNames(ID)) <> "" Then
