@@ -62,16 +62,16 @@ ErrorSection = "WorksheetSetup"
     For i = 2 To lastRow
 ErrorSection = "OVProcessing-" & i
     
-        If InStr(1, ws.Range("D" & i).Value, "DATA OV") > 0 Then
+        If InStr(1, ws.Range("D" & i).Value, "DATA OV") > 0 And (ws.Cells(i, ColumnWarningsStart).Value = "" Or ws.Cells(i, ColumnWarningsStart).Value = "ERRO") Then
 ErrorSection = "DataOVProcessing-" & i
             orderNumber = ws.Range("A" & i).Value
             itemCode = ws.Range("B" & i).Value
             currentItem = ""
             
             '--- Clear workbook values ---
-            ws.Cells(i, ColumnWarningsStart).Value = ""
-            ws.Cells(i, ColumnWarningsStart + 1).Value = ""
-            ws.Cells(i, ColumnWarningsStart + 2).Value = ""
+            'ws.Cells(i, ColumnWarningsStart).Value = ""
+            'ws.Cells(i, ColumnWarningsStart + 1).Value = ""
+            'ws.Cells(i, ColumnWarningsStart + 2).Value = ""
             
             ' Update status bar with progress info
             Application.StatusBar = "Executando... Ordem de Venda " & orderNumber & " (" & i - 1 & " de " & lastRow - 1 & ")"
@@ -84,40 +84,44 @@ ErrorSection = "DataOVProcessing-" & i
             If Not SetSAPText(Session, "wnd[0]/usr/ctxtVBAK-VBELN", orderNumber) Then GoTo NextIteration
             SAPSendVKey Session, 0
             
-            '--- Select first item and open it for editing ---
+            '--- Avoid Info Pop-up ---
+            On Error Resume Next
+            If Session.findById("wnd[1]").Text = "Informação" Then
+                Session.findById("wnd[1]/tbar[0]/btn[0]").press
+            End If
             On Error GoTo IterationError
-            Session.findbyid("wnd[0]/usr/tabsTAXI_TABSTRIP_OVERVIEW/tabpT\01/ssubSUBSCREEN_BODY:SAPMV45A:4400/" & _
-                "subSUBSCREEN_TC:SAPMV45A:4900/tblSAPMV45ATCTRL_U_ERF_AUFTRAG/txtVBAP-POSNR[0,0]").SetFocus
-            SAPPress Session, "wnd[0]/usr/tabsTAXI_TABSTRIP_OVERVIEW/tabpT\01/ssubSUBSCREEN_BODY:SAPMV45A:4400/" & _
-                "subSUBSCREEN_TC:SAPMV45A:4900/subSUBSCREEN_BUTTONS:SAPMV45A:4050/btnBT_PEIN"
+            
+            '--- Search and select the item then open it for editing ---
+            Session.findById("wnd[0]/usr/tabsTAXI_TABSTRIP_OVERVIEW/tabpT\01/ssubSUBSCREEN_BODY:SAPMV45A:4400/subSUBSCREEN_TC:SAPMV45A:4900/subSUBSCREEN_BUTTONS:SAPMV45A:4050/btnBT_POPO").press
+            Session.findById("wnd[1]/usr/txtRV45A-POSNR").Text = itemCode
+            Session.findById("wnd[1]/tbar[0]/btn[0]").press
+            Session.findById("wnd[0]/usr/tabsTAXI_TABSTRIP_OVERVIEW/tabpT\01/ssubSUBSCREEN_BODY:SAPMV45A:4400/subSUBSCREEN_TC:SAPMV45A:4900/subSUBSCREEN_BUTTONS:SAPMV45A:4050/btnBT_ITEM").press
+            
+            currentItem = itemCode
             
 ajusteDataOV:
-        
-            currentItem = Session.findbyid("wnd[0]/usr/subSUBSCREEN_HEADER:SAPMV45A:4013/txtVBAP-POSNR").Text
-        
-            Do While itemCode <> currentItem
-                SAPPress Session, "wnd[0]/tbar[1]/btn[19]"
-                
-                
-                currentItem = Session.findbyid("wnd[0]/usr/subSUBSCREEN_HEADER:SAPMV45A:4013/txtVBAP-POSNR").Text
-            Loop
-            
         
             dataSM = 0
             
             '--- Open the date adjustment screen ---
+            If Session.findById("wnd[0]/usr/tabsTAXI_TABSTRIP_ITEM/tabpT\07").Text = "Divisões da remessa" Then
+                Session.findById("wnd[0]/usr/tabsTAXI_TABSTRIP_ITEM/tabpT\07").Select
+            Else
+                Session.findById("wnd[0]/usr/tabsTAXI_TABSTRIP_ITEM/tabpT\08").Select
+            End If
+            
             SAPPress Session, "wnd[0]/usr/tabsTAXI_TABSTRIP_ITEM/tabpT\08/ssubSUBSCREEN_BODY:SAPMV45A:4500/btnP0_EID2"
             
             '--- Check if the "Data Remessa" field is changeable ---
             loopCount = 0
-            Do While Session.findbyid("wnd[0]/usr/tabsTAXI_TABSTRIP_SHEDLINE/tabpT\02/" & _
+            Do While Session.findById("wnd[0]/usr/tabsTAXI_TABSTRIP_SHEDLINE/tabpT\02/" & _
                     "ssubSUBSCREEN_BODY:SAPMV45A:4552/ctxtRV45A-ETDAT").changeable = False
                 ws.Cells(i, ColumnWarningsStart).Value = "ERRO"
                 ws.Cells(i, ColumnWarningsStart + 1).Value = "Remessa Criada ou Item Recusado"
                 SAPPress Session, "wnd[0]/tbar[0]/btn[3]"  ' Go back
-                item1 = Session.findbyid("wnd[0]/usr/subSUBSCREEN_HEADER:SAPMV45A:4013/txtVBAP-POSNR").Text
+                item1 = Session.findById("wnd[0]/usr/subSUBSCREEN_HEADER:SAPMV45A:4013/txtVBAP-POSNR").Text
                 SAPPress Session, "wnd[0]/tbar[1]/btn[19]"  ' Move forward
-                item2 = Session.findbyid("wnd[0]/usr/subSUBSCREEN_HEADER:SAPMV45A:4013/txtVBAP-POSNR").Text
+                item2 = Session.findById("wnd[0]/usr/subSUBSCREEN_HEADER:SAPMV45A:4013/txtVBAP-POSNR").Text
                 If item1 = item2 Then
                     GoTo NextIteration
                 Else
@@ -132,10 +136,9 @@ ajusteDataOV:
                     "ssubSUBSCREEN_BODY:SAPMV45A:4552/ctxtRV45A-ETDAT", Format(dataRemessa, "dd.mm.yyyy")) Then GoTo NextIteration
             SAPSendVKey Session, 0
             
-            If Session.findbyid("wnd[0]/sbar").Text <> "" And InStr(1, Session.findbyid("wnd[0]/sbar").Text, "Não existem part.vencida") = 0 Then
+            If Session.findById("wnd[0]/sbar").Text <> "" And InStr(1, Session.findById("wnd[0]/sbar").Text, "Não existem part.vencida") = 0 Then
                 GoTo IterationError
             End If
-            
             
             '--- Adjust the remittance date until it matches the desired separation date ---
             loopCount = 0
@@ -178,7 +181,7 @@ ajusteDataOV:
                 
                 On Error GoTo IterationError
                 ' If first time, read the current SAP material preparation date (Data SM)
-                strData = Session.findbyid("wnd[0]/usr/tabsTAXI_TABSTRIP_SHEDLINE/tabpT\02/" & _
+                strData = Session.findById("wnd[0]/usr/tabsTAXI_TABSTRIP_SHEDLINE/tabpT\02/" & _
                     "ssubSUBSCREEN_BODY:SAPMV45A:4552/ctxtVBEP-MBDAT").Text
                 dia = Format(Val(Mid(strData, 1, 2)), "00")
                 mes = Format(Val(Mid(strData, 4, 2)), "00")
@@ -208,30 +211,39 @@ ajusteDataOV:
             '--- Save changes ---
             On Error Resume Next
             SAPPress Session, "wnd[0]/tbar[0]/btn[11]" ' Save
+
+            '--- Check classificação pop-up ---
+            On Error Resume Next
+            If InStr(1, Session.findById("wnd[1]").Text, "Classificação", vbTextCompare) > 0 Then
+                Session.findById("wnd[1]/usr/subSUBSCREEN_STEPLOOP:SAPLSPO5:0160/sub:SAPLSPO5:0160/chkSPOPLI-SELFLAG[1,0]").Selected = True
+                Session.findById("wnd[1]/tbar[0]/btn[0]").press
+            End If
+            On Error GoTo IterationError
+            
             SAPSendVKey Session, 0
-            msg = Session.findbyid("wnd[0]/sbar/pane[0]").Text
+            msg = Session.findById("wnd[0]/sbar/pane[0]").Text
             If msg = "OV c/ Fornec.Completo. As datas de todas as linhas devem ser iguais." Then
                 SAPPress Session, "wnd[0]/tbar[0]/btn[3]"
                 SAPPress Session, "wnd[0]/tbar[0]/btn[3]"
-                Session.findbyid("wnd[0]/usr/tabsTAXI_TABSTRIP_OVERVIEW/tabpT\01/ssubSUBSCREEN_BODY:SAPMV45A:4400/" & _
+                Session.findById("wnd[0]/usr/tabsTAXI_TABSTRIP_OVERVIEW/tabpT\01/ssubSUBSCREEN_BODY:SAPMV45A:4400/" & _
                     "subSUBSCREEN_TC:SAPMV45A:4900/tblSAPMV45ATCTRL_U_ERF_AUFTRAG/ctxtRV45A-ETDAT[7,0]").Text = "25.03.2020"
-                Session.findbyid("wnd[0]/usr/tabsTAXI_TABSTRIP_OVERVIEW/tabpT\01/ssubSUBSCREEN_BODY:SAPMV45A:4400/" & _
+                Session.findById("wnd[0]/usr/tabsTAXI_TABSTRIP_OVERVIEW/tabpT\01/ssubSUBSCREEN_BODY:SAPMV45A:4400/" & _
                     "subSUBSCREEN_TC:SAPMV45A:4900/tblSAPMV45ATCTRL_U_ERF_AUFTRAG/ctxtRV45A-ETDAT[7,1]").Text = "25.03.2020"
                 SAPPress Session, "wnd[0]/tbar[0]/btn[11]"
                 SAPPress Session, "wnd[1]/tbar[0]/btn[0]"
                 j = 0
                 Do
                     j = j + 1
-                Loop Until Session.findbyid("wnd[0]/usr/tabsTAXI_TABSTRIP_OVERVIEW/tabpT\01/ssubSUBSCREEN_BODY:SAPMV45A:4400/" & _
+                Loop Until Session.findById("wnd[0]/usr/tabsTAXI_TABSTRIP_OVERVIEW/tabpT\01/ssubSUBSCREEN_BODY:SAPMV45A:4400/" & _
                     "subSUBSCREEN_TC:SAPMV45A:4900/tblSAPMV45ATCTRL_U_ERF_AUFTRAG/txtVBAP-POSNR[0," & j - 1 & "]").Text = currentItem
             End If
             
             '--- Update workbook with results ---
             ws.Cells(i, ColumnWarningsStart).Value = dataRemessa
             ws.Cells(i, ColumnWarningsStart + 1).Value = "CONCLUÍDO - " & Now()
-            ws.Cells(i, ColumnWarningsStart + 2).Value = Session.findbyid("wnd[0]/sbar").Text
+            ws.Cells(i, ColumnWarningsStart + 2).Value = msg
             
-        ElseIf InStr(1, ws.Range("D" & i).Value, "DATA DADOS AD. B") > 0 Then
+        ElseIf InStr(1, ws.Range("D" & i).Value, "DATA DADOS AD. B") > 0 And (ws.Cells(i, ColumnWarningsStart).Value = "" Or ws.Cells(i, ColumnWarningsStart).Value = "ERRO") Then
 ErrorSection = "DataDadosAdBProcessing-" & i
             On Error GoTo IterationError
             
@@ -240,9 +252,9 @@ ErrorSection = "DataDadosAdBProcessing-" & i
             currentItem = ""
             
             '--- Clear workbook values ---
-            ws.Cells(i, ColumnWarningsStart).Value = ""
-            ws.Cells(i, ColumnWarningsStart + 1).Value = ""
-            ws.Cells(i, ColumnWarningsStart + 2).Value = ""
+            'ws.Cells(i, ColumnWarningsStart).Value = ""
+            'ws.Cells(i, ColumnWarningsStart + 1).Value = ""
+            'ws.Cells(i, ColumnWarningsStart + 2).Value = ""
             
             ' Update status bar with progress info
             Application.StatusBar = "Executando... Ordem de Venda " & orderNumber & " (" & i - 1 & " de " & lastRow - 1 & ")"
@@ -257,49 +269,56 @@ ErrorSection = "DataDadosAdBProcessing-" & i
             
             '--- Avoid Info Pop-up ---
             On Error Resume Next
-            If Session.findbyid("wnd[1]").Text = "Informação" Then
-                Session.findbyid("wnd[1]/tbar[0]/btn[0]").Press
+            If Session.findById("wnd[1]").Text = "Informação" Then
+                Session.findById("wnd[1]/tbar[0]/btn[0]").press
             End If
             On Error GoTo IterationError
             
-            '--- Select first item and open it for editing ---
-            On Error GoTo IterationError
-            Session.findbyid("wnd[0]/usr/tabsTAXI_TABSTRIP_OVERVIEW/tabpT\01/ssubSUBSCREEN_BODY:SAPMV45A:4400/" & _
-                "subSUBSCREEN_TC:SAPMV45A:4900/tblSAPMV45ATCTRL_U_ERF_AUFTRAG/txtVBAP-POSNR[0,0]").SetFocus
-            SAPPress Session, "wnd[0]/usr/tabsTAXI_TABSTRIP_OVERVIEW/tabpT\01/ssubSUBSCREEN_BODY:SAPMV45A:4400/" & _
-                "subSUBSCREEN_TC:SAPMV45A:4900/subSUBSCREEN_BUTTONS:SAPMV45A:4050/btnBT_PEIN"
+            '--- Search and select the item then open it for editing ---
+            Session.findById("wnd[0]/usr/tabsTAXI_TABSTRIP_OVERVIEW/tabpT\01/ssubSUBSCREEN_BODY:SAPMV45A:4400/subSUBSCREEN_TC:SAPMV45A:4900/subSUBSCREEN_BUTTONS:SAPMV45A:4050/btnBT_POPO").press
+            Session.findById("wnd[1]/usr/txtRV45A-POSNR").Text = itemCode
+            Session.findById("wnd[1]/tbar[0]/btn[0]").press
+            Session.findById("wnd[0]/usr/tabsTAXI_TABSTRIP_OVERVIEW/tabpT\01/ssubSUBSCREEN_BODY:SAPMV45A:4400/subSUBSCREEN_TC:SAPMV45A:4900/subSUBSCREEN_BUTTONS:SAPMV45A:4050/btnBT_ITEM").press
+            
+            currentItem = itemCode
             
 ajusteDataDadosB:
-
-            Session.findbyid("wnd[0]/usr/tabsTAXI_TABSTRIP_ITEM/tabpT\15").Select
-        
-            currentItem = Session.findbyid("wnd[0]/usr/subSUBSCREEN_HEADER:SAPMV45A:4013/txtVBAP-POSNR").Text
-        
-            Do While itemCode <> currentItem
-                SAPPress Session, "wnd[0]/tbar[1]/btn[19]"
-                
-                currentItem = Session.findbyid("wnd[0]/usr/subSUBSCREEN_HEADER:SAPMV45A:4013/txtVBAP-POSNR").Text
-            Loop
+            
+            If Session.findById("wnd[0]/usr/tabsTAXI_TABSTRIP_ITEM/tabpT\14").Text = "Dados adicionais B" Then
+                Session.findById("wnd[0]/usr/tabsTAXI_TABSTRIP_ITEM/tabpT\14").Select
+            Else
+                Session.findById("wnd[0]/usr/tabsTAXI_TABSTRIP_ITEM/tabpT\15").Select
+            End If
             
             '--- Set separation and remittance dates based on the workbook ---
             dataSeparacao = ws.Range("C" & i).Value
             dataRemessa = dataSeparacao
             
-            Session.findbyid("wnd[0]/usr/tabsTAXI_TABSTRIP_ITEM/tabpT\15/ssubSUBSCREEN_BODY:SAPMV45A:4462/subKUNDEN-SUBSCREEN_8459:SAPMV45A:8459/cntlCT_ALV_8459/shellcont/shell").modifyCell 0, "DT_EXPEC_FAT", Format(dataSeparacao, "dd.mm.yyyy")
-            Session.findbyid("wnd[0]/usr/tabsTAXI_TABSTRIP_ITEM/tabpT\15/ssubSUBSCREEN_BODY:SAPMV45A:4462/subKUNDEN-SUBSCREEN_8459:SAPMV45A:8459/cntlCT_ALV_8459/shellcont/shell").modifyCell 0, "DS_VALOR", "PRODUÇÃO"
-            Session.findbyid("wnd[0]/usr/tabsTAXI_TABSTRIP_ITEM/tabpT\15/ssubSUBSCREEN_BODY:SAPMV45A:4462/subKUNDEN-SUBSCREEN_8459:SAPMV45A:8459/cntlCT_ALV_8459/shellcont/shell").modifyCell 0, "DT_EXPEC_REC", Format(dataSeparacao, "dd.mm.yyyy")
+            Session.findById("wnd[0]/usr/tabsTAXI_TABSTRIP_ITEM/tabpT\14/ssubSUBSCREEN_BODY:SAPMV45A:4462/subKUNDEN-SUBSCREEN_8459:SAPMV45A:8459/cntlCT_ALV_8459/shellcont/shell").modifyCell 0, "DT_EXPEC_FAT", Format(dataSeparacao, "dd.mm.yyyy")
+            Session.findById("wnd[0]/usr/tabsTAXI_TABSTRIP_ITEM/tabpT\14/ssubSUBSCREEN_BODY:SAPMV45A:4462/subKUNDEN-SUBSCREEN_8459:SAPMV45A:8459/cntlCT_ALV_8459/shellcont/shell").modifyCell 0, "DS_VALOR", "PRODUÇÃO"
+            Session.findById("wnd[0]/usr/tabsTAXI_TABSTRIP_ITEM/tabpT\14/ssubSUBSCREEN_BODY:SAPMV45A:4462/subKUNDEN-SUBSCREEN_8459:SAPMV45A:8459/cntlCT_ALV_8459/shellcont/shell").modifyCell 0, "DT_EXPEC_REC", Format(dataSeparacao, "dd.mm.yyyy")
             
             SAPSendVKey Session, 0
             
-            If Session.findbyid("wnd[0]/sbar").Text <> "" And InStr(1, Session.findbyid("wnd[0]/sbar").Text, "Não existem part.vencida") = 0 Then
+            If Session.findById("wnd[0]/sbar").Text <> "" And InStr(1, Session.findById("wnd[0]/sbar").Text, "Não existem part.vencida") = 0 Then
                 GoTo IterationError
             End If
         
             '--- Save changes ---
             On Error Resume Next
             SAPPress Session, "wnd[0]/tbar[0]/btn[11]" ' Save
+            
+            '--- Avoid Info Pop-up ---
+            On Error Resume Next
+            If Session.findById("wnd[1]").Text = "Gravar documento incompleto" Then
+                Session.findById("wnd[1]/usr/btnSPOP-VAROPTION1").press
+            ElseIf Session.findById("wnd[1]").Text <> "" Then
+                SAPPress Session, "wnd[1]/tbar[0]/btn[0]"
+            End If
+            On Error GoTo IterationError
+            
             ' SAPSendVKey Session, 0
-            msg = Session.findbyid("wnd[0]/sbar/pane[0]").Text
+            msg = Session.findById("wnd[0]/sbar/pane[0]").Text
             If msg = "OV c/ Fornec.Completo. As datas de todas as linhas devem ser iguais." Then
                 SAPPress Session, "wnd[0]/tbar[0]/btn[3]"
                 SAPPress Session, "wnd[0]/tbar[0]/btn[3]"
@@ -313,20 +332,20 @@ ajusteDataDadosB:
                 j = 0
                 Do
                     j = j + 1
-                Loop Until Session.findbyid("wnd[0]/usr/tabsTAXI_TABSTRIP_OVERVIEW/tabpT\01/ssubSUBSCREEN_BODY:SAPMV45A:4400/" & _
+                Loop Until Session.findById("wnd[0]/usr/tabsTAXI_TABSTRIP_OVERVIEW/tabpT\01/ssubSUBSCREEN_BODY:SAPMV45A:4400/" & _
                     "subSUBSCREEN_TC:SAPMV45A:4900/tblSAPMV45ATCTRL_U_ERF_AUFTRAG/txtVBAP-POSNR[0," & j - 1 & "]").Text = currentItem
             End If
             
             '--- Update workbook with results ---
             ws.Cells(i, ColumnWarningsStart).Value = dataSeparacao
             ws.Cells(i, ColumnWarningsStart + 1).Value = "CONCLUÍDO - " & Now()
-            ws.Cells(i, ColumnWarningsStart + 2).Value = Session.findbyid("wnd[0]/sbar").Text
+            ws.Cells(i, ColumnWarningsStart + 2).Value = msg
         Else
 ErrorSection = "IgnoredProcessing-" & i
             '--- Update workbook with results ---
-            ws.Cells(i, ColumnWarningsStart).Value = "IGNORADO"
-            ws.Cells(i, ColumnWarningsStart + 1).Value = "IGNORADO - " & Now()
-            ws.Cells(i, ColumnWarningsStart + 2).Value = ""
+            'ws.Cells(i, ColumnWarningsStart).Value = "IGNORADO"
+            'ws.Cells(i, ColumnWarningsStart + 1).Value = "IGNORADO - " & Now()
+            'ws.Cells(i, ColumnWarningsStart + 2).Value = ""
         End If
         
 NextIteration:
@@ -350,7 +369,7 @@ ErrorSection = "Ending"
 '----------------------------------------------
 IterationError:
     ws.Range("G" & i) = "ERRO"
-    ws.Range("H" & i) = "Erro ao processar o item: " & NextItem & " - " & Session.findbyid("wnd[0]/sbar").Text
+    ws.Range("H" & i) = "Erro ao processar o item: " & NextItem & " - " & Session.findById("wnd[0]/sbar").Text
     Resume NextIteration
     
 CleanExit:
@@ -401,9 +420,9 @@ Sub GerarClaim(Optional ShowOnMacroList = False)
 
     'Se janela ativa é a janela principal do SAP, entrar na transação CLM1
     'If session.info.transaction = "SESSION_MANAGER" Then
-        Session.findbyid("wnd[0]").maximize
-        Session.findbyid("wnd[0]/tbar[0]/okcd").Text = "/nclm1"
-        Session.findbyid("wnd[0]").sendVKey 0
+        Session.findById("wnd[0]").maximize
+        Session.findById("wnd[0]/tbar[0]/okcd").Text = "/nclm1"
+        Session.findById("wnd[0]").sendVKey 0
     'End If
     
     'Contar o número de linhas
@@ -414,40 +433,40 @@ Sub GerarClaim(Optional ShowOnMacroList = False)
     'Loop de preenchimento e alteração
     For i = 2 To linha
   
-        Session.findbyid("wnd[0]").maximize
-        Session.findbyid("wnd[0]/tbar[0]/okcd").Text = "/nclm1"
-        Session.findbyid("wnd[0]").sendVKey 0
-        Session.findbyid("wnd[0]/usr/cmbRIWO00-QMART").Key = "ZZ"
-        Session.findbyid("wnd[0]").sendVKey 0
-        Session.findbyid("wnd[0]/usr/tabsTAB_GROUP_10/tabp10\TAB01/ssubSUB_GROUP_10:SAPLIQS0:7235/subCUSTOM_SCREEN:SAPLIQS0:7212/subSUBSCREEN_1:SAPLIQS0:7715/cntlTEXT/shellcont/shell").Text = "Favor alterar data de preparação da OV  " + Plan1.Range("A" & (i)).Value + " conforme segue:" + vbCr + "" + vbCr + "DE:" + Planilha1.Range("G" & (i)).Value + "   PARA:" + Plan1.Range("C" & (i)).Value + vbCr + "" + vbCr + "" + vbCr + ""
-        Session.findbyid("wnd[0]/usr/tabsTAB_GROUP_10/tabp10\TAB01/ssubSUB_GROUP_10:SAPLIQS0:7235/subCUSTOM_SCREEN:SAPLIQS0:7212/subSUBSCREEN_1:SAPLIQS0:7715/cntlTEXT/shellcont/shell").setSelectionIndexes 126, 126
-        Session.findbyid("wnd[0]/usr/tabsTAB_GROUP_10/tabp10\TAB01/ssubSUB_GROUP_10:SAPLIQS0:7235/subCUSTOM_SCREEN:SAPLIQS0:7212/subSUBSCREEN_1:SAPLIQS0:7715/txtRIWO00-HEADKTXT").Text = "Alteração de data do gerador" & " " & Plan1.Range("A" & (i)).Value
-        Session.findbyid("wnd[0]/usr/tabsTAB_GROUP_10/tabp10\TAB01/ssubSUB_GROUP_10:SAPLIQS0:7235/subCUSTOM_SCREEN:SAPLIQS0:7212/subSUBSCREEN_2:SAPMCLAIM:7800/ctxtCLAIM-URGRP").SetFocus
-        Session.findbyid("wnd[0]/usr/tabsTAB_GROUP_10/tabp10\TAB01/ssubSUB_GROUP_10:SAPLIQS0:7235/subCUSTOM_SCREEN:SAPLIQS0:7212/subSUBSCREEN_2:SAPMCLAIM:7800/ctxtCLAIM-URGRP").caretPosition = 0
-        Session.findbyid("wnd[0]").sendVKey 4
-        Session.findbyid("wnd[1]/usr/cntlTREE_CONTROL_AREA/shellcont/shell").expandNode "         73"
-        Session.findbyid("wnd[1]/usr/cntlTREE_CONTROL_AREA/shellcont/shell").topNode = "          1"
-        Session.findbyid("wnd[1]/usr/cntlTREE_CONTROL_AREA/shellcont/shell").selectItem "         74", "3"
-        Session.findbyid("wnd[1]/usr/cntlTREE_CONTROL_AREA/shellcont/shell").ensureVisibleHorizontalItem "         74", "3"
-        Session.findbyid("wnd[1]/usr/cntlTREE_CONTROL_AREA/shellcont/shell").doubleClickItem "         74", "3"
-        Session.findbyid("wnd[0]/usr/tabsTAB_GROUP_10/tabp10\TAB01/ssubSUB_GROUP_10:SAPLIQS0:7235/subCUSTOM_SCREEN:SAPLIQS0:7212/subSUBSCREEN_3:SAPLIQS0:7740/subBELEG:SAPMCLAIM:3071/ctxtVIQMEL-LS_KDAUF").Text = Plan1.Range("A" & (i)).Value
-        Session.findbyid("wnd[0]/usr/tabsTAB_GROUP_10/tabp10\TAB01/ssubSUB_GROUP_10:SAPLIQS0:7235/subCUSTOM_SCREEN:SAPLIQS0:7212/subSUBSCREEN_3:SAPLIQS0:7740/subBELEG:SAPMCLAIM:3071/ctxtVIQMEL-LS_KDPOS").Text = Plan1.Range("B" & (i)).Value
-        Session.findbyid("wnd[0]/usr/tabsTAB_GROUP_10/tabp10\TAB01/ssubSUB_GROUP_10:SAPLIQS0:7235/subCUSTOM_SCREEN:SAPLIQS0:7212/subSUBSCREEN_3:SAPLIQS0:7740/subBELEG:SAPMCLAIM:3071/ctxtVIQMEL-LS_KDPOS").SetFocus
-        Session.findbyid("wnd[0]/usr/tabsTAB_GROUP_10/tabp10\TAB01/ssubSUB_GROUP_10:SAPLIQS0:7235/subCUSTOM_SCREEN:SAPLIQS0:7212/subSUBSCREEN_3:SAPLIQS0:7740/subBELEG:SAPMCLAIM:3071/ctxtVIQMEL-LS_KDPOS").caretPosition = 2
-        Session.findbyid("wnd[0]").sendVKey 0
-        Session.findbyid("wnd[0]/usr/tabsTAB_GROUP_10/tabp10\TAB01/ssubSUB_GROUP_10:SAPLIQS0:7235/subCUSTOM_SCREEN:SAPLIQS0:7212/subSUBSCREEN_1:SAPLIQS0:7715/cntlTEXT/shellcont/shell").Text = "Favor alterar data de preparação da OV" & " " & Plan1.Range("A" & (i)).Value & "                            " & "DE:" & " " & Planilha1.Range("G" & (i)).Value & "                   " & "PARA:" & " " & Plan1.Range("C" & (i)).Value
-        Session.findbyid("wnd[0]/usr/tabsTAB_GROUP_10/tabp10\TAB01/ssubSUB_GROUP_10:SAPLIQS0:7235/subCUSTOM_SCREEN:SAPLIQS0:7212/subSUBSCREEN_1:SAPLIQS0:7715/cntlTEXT/shellcont/shell").setSelectionIndexes 148, 148
-        Session.findbyid("wnd[0]/shellcont/shell").selectItem "0010", "Column01"
-        Session.findbyid("wnd[0]/shellcont/shell").ensureVisibleHorizontalItem "0010", "Column01"
-        Session.findbyid("wnd[0]/shellcont/shell").clickLink "0010", "Column01"
-        Session.findbyid("wnd[1]/usr/cntlCONTAINER/shellcont/shell[0]").expandNode "HWAU"
-        Session.findbyid("wnd[1]/usr/cntlCONTAINER/shellcont/shell[0]").expandNode "623SOPCPWAU"
-        Session.findbyid("wnd[1]/usr/cntlCONTAINER/shellcont/shell[0]").selectedNode = "000000003603"
-        Session.findbyid("wnd[1]/usr/cntlCONTAINER/shellcont/shell[0]").topNode = "617USPVENWA"
-        Session.findbyid("wnd[1]/usr/cntlCONTAINER/shellcont/shell[0]").doubleClickNode "000000003603"
-        Session.findbyid("wnd[1]/usr/cntlCONTAINER2/shellcont/shell").modifyCell 0, "RESP", "kamila"
-        Session.findbyid("wnd[1]/usr/cntlCONTAINER2/shellcont/shell").setCurrentCell -1, ""
-        Session.findbyid("wnd[1]/usr/cntlCONTAINER2/shellcont/shell").firstVisibleColumn = "SUB_GRUPO"
+        Session.findById("wnd[0]").maximize
+        Session.findById("wnd[0]/tbar[0]/okcd").Text = "/nclm1"
+        Session.findById("wnd[0]").sendVKey 0
+        Session.findById("wnd[0]/usr/cmbRIWO00-QMART").Key = "ZZ"
+        Session.findById("wnd[0]").sendVKey 0
+        Session.findById("wnd[0]/usr/tabsTAB_GROUP_10/tabp10\TAB01/ssubSUB_GROUP_10:SAPLIQS0:7235/subCUSTOM_SCREEN:SAPLIQS0:7212/subSUBSCREEN_1:SAPLIQS0:7715/cntlTEXT/shellcont/shell").Text = "Favor alterar data de preparação da OV  " + Plan1.Range("A" & (i)).Value + " conforme segue:" + vbCr + "" + vbCr + "DE:" + Planilha1.Range("G" & (i)).Value + "   PARA:" + Plan1.Range("C" & (i)).Value + vbCr + "" + vbCr + "" + vbCr + ""
+        Session.findById("wnd[0]/usr/tabsTAB_GROUP_10/tabp10\TAB01/ssubSUB_GROUP_10:SAPLIQS0:7235/subCUSTOM_SCREEN:SAPLIQS0:7212/subSUBSCREEN_1:SAPLIQS0:7715/cntlTEXT/shellcont/shell").setSelectionIndexes 126, 126
+        Session.findById("wnd[0]/usr/tabsTAB_GROUP_10/tabp10\TAB01/ssubSUB_GROUP_10:SAPLIQS0:7235/subCUSTOM_SCREEN:SAPLIQS0:7212/subSUBSCREEN_1:SAPLIQS0:7715/txtRIWO00-HEADKTXT").Text = "Alteração de data do gerador" & " " & Plan1.Range("A" & (i)).Value
+        Session.findById("wnd[0]/usr/tabsTAB_GROUP_10/tabp10\TAB01/ssubSUB_GROUP_10:SAPLIQS0:7235/subCUSTOM_SCREEN:SAPLIQS0:7212/subSUBSCREEN_2:SAPMCLAIM:7800/ctxtCLAIM-URGRP").SetFocus
+        Session.findById("wnd[0]/usr/tabsTAB_GROUP_10/tabp10\TAB01/ssubSUB_GROUP_10:SAPLIQS0:7235/subCUSTOM_SCREEN:SAPLIQS0:7212/subSUBSCREEN_2:SAPMCLAIM:7800/ctxtCLAIM-URGRP").caretPosition = 0
+        Session.findById("wnd[0]").sendVKey 4
+        Session.findById("wnd[1]/usr/cntlTREE_CONTROL_AREA/shellcont/shell").expandNode "         73"
+        Session.findById("wnd[1]/usr/cntlTREE_CONTROL_AREA/shellcont/shell").topNode = "          1"
+        Session.findById("wnd[1]/usr/cntlTREE_CONTROL_AREA/shellcont/shell").selectItem "         74", "3"
+        Session.findById("wnd[1]/usr/cntlTREE_CONTROL_AREA/shellcont/shell").ensureVisibleHorizontalItem "         74", "3"
+        Session.findById("wnd[1]/usr/cntlTREE_CONTROL_AREA/shellcont/shell").doubleClickItem "         74", "3"
+        Session.findById("wnd[0]/usr/tabsTAB_GROUP_10/tabp10\TAB01/ssubSUB_GROUP_10:SAPLIQS0:7235/subCUSTOM_SCREEN:SAPLIQS0:7212/subSUBSCREEN_3:SAPLIQS0:7740/subBELEG:SAPMCLAIM:3071/ctxtVIQMEL-LS_KDAUF").Text = Plan1.Range("A" & (i)).Value
+        Session.findById("wnd[0]/usr/tabsTAB_GROUP_10/tabp10\TAB01/ssubSUB_GROUP_10:SAPLIQS0:7235/subCUSTOM_SCREEN:SAPLIQS0:7212/subSUBSCREEN_3:SAPLIQS0:7740/subBELEG:SAPMCLAIM:3071/ctxtVIQMEL-LS_KDPOS").Text = Plan1.Range("B" & (i)).Value
+        Session.findById("wnd[0]/usr/tabsTAB_GROUP_10/tabp10\TAB01/ssubSUB_GROUP_10:SAPLIQS0:7235/subCUSTOM_SCREEN:SAPLIQS0:7212/subSUBSCREEN_3:SAPLIQS0:7740/subBELEG:SAPMCLAIM:3071/ctxtVIQMEL-LS_KDPOS").SetFocus
+        Session.findById("wnd[0]/usr/tabsTAB_GROUP_10/tabp10\TAB01/ssubSUB_GROUP_10:SAPLIQS0:7235/subCUSTOM_SCREEN:SAPLIQS0:7212/subSUBSCREEN_3:SAPLIQS0:7740/subBELEG:SAPMCLAIM:3071/ctxtVIQMEL-LS_KDPOS").caretPosition = 2
+        Session.findById("wnd[0]").sendVKey 0
+        Session.findById("wnd[0]/usr/tabsTAB_GROUP_10/tabp10\TAB01/ssubSUB_GROUP_10:SAPLIQS0:7235/subCUSTOM_SCREEN:SAPLIQS0:7212/subSUBSCREEN_1:SAPLIQS0:7715/cntlTEXT/shellcont/shell").Text = "Favor alterar data de preparação da OV" & " " & Plan1.Range("A" & (i)).Value & "                            " & "DE:" & " " & Planilha1.Range("G" & (i)).Value & "                   " & "PARA:" & " " & Plan1.Range("C" & (i)).Value
+        Session.findById("wnd[0]/usr/tabsTAB_GROUP_10/tabp10\TAB01/ssubSUB_GROUP_10:SAPLIQS0:7235/subCUSTOM_SCREEN:SAPLIQS0:7212/subSUBSCREEN_1:SAPLIQS0:7715/cntlTEXT/shellcont/shell").setSelectionIndexes 148, 148
+        Session.findById("wnd[0]/shellcont/shell").selectItem "0010", "Column01"
+        Session.findById("wnd[0]/shellcont/shell").ensureVisibleHorizontalItem "0010", "Column01"
+        Session.findById("wnd[0]/shellcont/shell").clickLink "0010", "Column01"
+        Session.findById("wnd[1]/usr/cntlCONTAINER/shellcont/shell[0]").expandNode "HWAU"
+        Session.findById("wnd[1]/usr/cntlCONTAINER/shellcont/shell[0]").expandNode "623SOPCPWAU"
+        Session.findById("wnd[1]/usr/cntlCONTAINER/shellcont/shell[0]").selectedNode = "000000003603"
+        Session.findById("wnd[1]/usr/cntlCONTAINER/shellcont/shell[0]").topNode = "617USPVENWA"
+        Session.findById("wnd[1]/usr/cntlCONTAINER/shellcont/shell[0]").doubleClickNode "000000003603"
+        Session.findById("wnd[1]/usr/cntlCONTAINER2/shellcont/shell").modifyCell 0, "RESP", "kamila"
+        Session.findById("wnd[1]/usr/cntlCONTAINER2/shellcont/shell").setCurrentCell -1, ""
+        Session.findById("wnd[1]/usr/cntlCONTAINER2/shellcont/shell").firstVisibleColumn = "SUB_GRUPO"
         'session.findById("wnd[1]/usr/cntlCONTAINER2/shellcont/shell").selectColumn "GRUPO"
         'session.findById("wnd[1]/usr/cntlCONTAINER2/shellcont/shell").selectColumn "SUB_GRUPO"
         'session.findById("wnd[1]/usr/cntlCONTAINER2/shellcont/shell").selectColumn "DS_ATIVIDADE"
@@ -456,12 +475,12 @@ Sub GerarClaim(Optional ShowOnMacroList = False)
         'session.findById("wnd[1]/usr/cntlCONTAINER2/shellcont/shell").selectColumn "HR_LIMITE"
         'session.findById("wnd[1]/usr/cntlCONTAINER2/shellcont/shell").selectColumn "TP_RESP"
         'session.findById("wnd[1]/usr/cntlCONTAINER2/shellcont/shell").selectColumn "RESP" '
-        Session.findbyid("wnd[1]/usr/cntlCONTAINER2/shellcont/shell").selectedRows = "0"
-        Session.findbyid("wnd[1]/tbar[0]/btn[44]").Press
-        Session.findbyid("wnd[0]/tbar[1]/btn[14]").Press
-        Session.findbyid("wnd[0]/tbar[0]/btn[11]").Press
-        Session.findbyid("wnd[0]/sbar").DoubleClick
-        Range("F" & i) = Session.findbyid("wnd[0]/sbar").Text
+        Session.findById("wnd[1]/usr/cntlCONTAINER2/shellcont/shell").selectedRows = "0"
+        Session.findById("wnd[1]/tbar[0]/btn[44]").press
+        Session.findById("wnd[0]/tbar[1]/btn[14]").press
+        Session.findById("wnd[0]/tbar[0]/btn[11]").press
+        Session.findById("wnd[0]/sbar").DoubleClick
+        Range("F" & i) = Session.findById("wnd[0]/sbar").Text
        
     Next
    
@@ -474,7 +493,7 @@ End Sub
 ' Safely sets the Text property of a SAP control.
 Function SetSAPText(Session As Object, controlId As String, textValue As String) As Boolean
     On Error GoTo ErrHandler
-    Session.findbyid(controlId).Text = textValue
+    Session.findById(controlId).Text = textValue
     SetSAPText = True
     Exit Function
 ErrHandler:
@@ -484,7 +503,7 @@ End Function
 ' Safely simulates a button press on a SAP control.
 Function SAPPress(Session As Object, controlId As String) As Boolean
     On Error GoTo ErrHandler
-    Session.findbyid(controlId).Press
+    Session.findById(controlId).press
     SAPPress = True
     Exit Function
 ErrHandler:
@@ -494,7 +513,7 @@ End Function
 ' Safely sends a VKey command (for example, simulating Enter) to SAP.
 Function SAPSendVKey(Session As Object, keyCode As Integer) As Boolean
     On Error GoTo ErrHandler
-    Session.findbyid("wnd[0]").sendVKey keyCode
+    Session.findById("wnd[0]").sendVKey keyCode
     SAPSendVKey = True
     Exit Function
 ErrHandler:
