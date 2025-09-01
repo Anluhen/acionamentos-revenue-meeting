@@ -1,6 +1,6 @@
 Attribute VB_Name = "QueryTools"
 ' ----- Version -----
-'        1.5.4
+'        1.7.0
 ' -------------------
 
 Option Explicit
@@ -57,7 +57,7 @@ Debug.Print "Timers: "
 temp = Timer
     
 ' Maintenance
-If False Then
+If True Then
     MsgBox "Em manutenção. Macro desabilitada.", vbInformation
     GoTo CleanExit
 End If
@@ -183,15 +183,15 @@ temp = Timer
 
 ErrorSection = "SaveData"
 
-    manualDataEntryStart = 23
-    manualDataEntrySize = 5
+    manualDataEntryStart = 23 'As referenced after the cut and paste
+    manualDataEntrySize = 6
     statusColumn = 5 ' As referenced by the table
     IDColumn = 1 ' As referenced by the table
     PMColumn = 16 ' As referenced by the table
     
     ' --- Columns must be ajusted in case of layout changes ---
     ' Cut manully filled columns J to N to the end of the table before pasting
-    Columns("Q:V").Cut
+    Columns("Q:W").Cut
     ' Paste it after the table (+1 column to compensate the shift of the table position
     Columns(tbl.DataBodyRange.Columns.Count + 2).Insert Shift:=xlToRight
     
@@ -377,7 +377,7 @@ ErrorSection = "FormatSheet"
 
     ' --- Columns must be ajusted in case of layout changes ---
     ' Restore columns position
-    Columns("W:AB").Cut
+    Columns("W:AC").Cut
     Columns("Q").Insert Shift:=xlToRight
     
 Debug.Print "Time to add new week: " & Timer - temp
@@ -385,13 +385,13 @@ temp = Timer
     
     ' --- Columns must be ajusted in case of layout changes ---
     ' Ajust column widths
-    Columns("C:AB").AutoFit
+    Columns("C:AC").AutoFit
     Columns("I").ColumnWidth = 5 ' Item Doc. Vendas
     Columns("L").ColumnWidth = 5 ' Incoterms
     Columns("M:R").ColumnWidth = 12 ' Datas
-    Columns("U").ColumnWidth = 35 ' Observação
-    ' Columns("V").ColumnWidth = 10 ' Situação
-    Columns("W").ColumnWidth = 20 ' PM
+    Columns("V").ColumnWidth = 35 ' Observação
+    ' Columns("W").ColumnWidth = 10 ' Situação
+    Columns("X").ColumnWidth = 20 ' PM
 
 ErrorSection = "TreatData"
 
@@ -431,8 +431,8 @@ ErrorSection = "TreatData-" & i
         tbl.ListColumns(16).DataBodyRange.Formula2 = "=IF(IFERROR(INDEX(PREVISÃO_ESTOQUE[Previsão de Estoque],MATCH(LEFT([@PEP],LEN([@PEP])-1),LEFT(PREVISÃO_ESTOQUE[[#Data],[PEP]],LEN(PREVISÃO_ESTOQUE[[#Data],[PEP]])-1),0)),"""")=0,"""",IFERROR(INDEX(PREVISÃO_ESTOQUE[Previsão de Estoque],MATCH(LEFT([@PEP],LEN([@PEP])-1),LEFT(PREVISÃO_ESTOQUE[[#Data],[PEP]],LEN(PREVISÃO_ESTOQUE[[#Data],[PEP]])-1),0)),""""))"
         
         ' Apply formula to column 27 and 28 of the table
-        tbl.ListColumns(26).DataBodyRange.Formula = "=IF([@[Data de Rec.Receita ]]="""",[@[Mês BI]],UPPER(TEXT([@[Data de Rec.Receita ]],""mmmm"")))"
-        tbl.ListColumns(27).DataBodyRange.Formula = "=IF([@[Data de Rec.Receita ]]="""",[@[Ano BI]],UPPER(TEXT([@[Data de Rec.Receita ]],""aaaa"")))"
+        tbl.ListColumns(27).DataBodyRange.Formula = "=IF([@[Data de Rec.Receita ]]="""",[@[Mês BI]],UPPER(TEXT([@[Data de Rec.Receita ]],""mmmm"")))"
+        tbl.ListColumns(28).DataBodyRange.Formula = "=IF([@[Data de Rec.Receita ]]="""",[@[Ano BI]],UPPER(TEXT([@[Data de Rec.Receita ]],""aaaa"")))"
 
         ' Highlight
         'For i = 1 To targetRowCount
